@@ -201,7 +201,7 @@ let selectedDigits = [];
 let codeLocked = false;
 var currentChoiceMoment = null;
 
-function addChoiceButton(ul, item, index) {
+function addChoiceButton(ul, item, index, isDefault) {
 	const li = document.createElement('li');
 	const button = document.createElement('button');
 	button.type = 'button';
@@ -233,6 +233,19 @@ function addChoiceButton(ul, item, index) {
 	}
 
 	button.append(key, label);
+
+	// A timer sign marks the choice that the film picks when time ends.
+	if (isDefault) {
+		const auto = document.createElement('span');
+		auto.className = 'choice-auto';
+		auto.title = 'The film picks this if you give no answer';
+		auto.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3 1h10v3L9.500 8 13 12v3H3v-3l3.500-4L3 4z"/></svg>';
+		const words = document.createElement('span');
+		words.className = 'visually-hidden';
+		words.textContent = ', the film picks this if you give no answer';
+		auto.append(words);
+		button.append(auto);
+	}
 	button.addEventListener('click', () => choice(index));
 	li.append(button);
 	ul.append(li);
@@ -380,10 +393,8 @@ function addChoices(r) {
 		addKeypad(ul);
 		setChoiceHint('Enter the 5-digit number.');
 	} else {
-		r.choices.forEach((x, index) => addChoiceButton(ul, x, index));
-		let fallback = r.choices[r.defaultChoiceIndex];
-		if (r.choices.length > 1 && fallback && fallback.text)
-			setChoiceHint('No answer picks ' + fallback.text + '.');
+		r.choices.forEach((x, index) => addChoiceButton(ul, x, index,
+			r.choices.length > 1 && index == r.defaultChoiceIndex));
 	}
 
 	if (r.id in choicePoints)
