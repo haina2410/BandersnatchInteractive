@@ -1,42 +1,37 @@
-# Bandersnatch Interactive Player (based on html5 video player)
+# Bandersnatch Interactive Player
 
-With this online(html) video player you can watch `Bandersnatch` episode of `Black Mirror` **interactively**.
+Watch Bandersnatch in your browser and make choices that determine what happens next.
 
-[Live demo](https://mohetios.github.io/BandersnatchInteractive/)
+## Run with Docker
 
-## How to use
+Build the static site and serve it with unprivileged NGINX.
 
-The only thing you need is 5hours video file of `Bandersnatch` episode, Drag & drop the file in [this](https://mohetios.github.io/BandersnatchInteractive/) page and enjoy!
+```sh
+docker build -t bandersnatch-player .
+docker run --rm -p 8080:8080 bandersnatch-player
+```
 
-## Screenshot
+Open [http://localhost:8080](http://localhost:8080) and select **Play film**. The browser streams the film from its host. The image contains the player and subtitles.
 
-- full screen mode
+## Playback
 
-![Screenshot](screenshot/full-screen.png)
+The configured source is a Matroska file with HEVC video. Use Chrome or Edge on a device with HEVC playback support. Select subtitles in the playback toolbar and choose the language of interactive choices on the start screen.
 
-- non full screen mode
-- ![Screenshot](screenshot/non-full-screen.png)
+The player resumes from a bookmarked scene or your saved position. **Reset progress** clears saved choices and watch history.
 
-## Tips
+| Key | Action |
+| --- | --- |
+| Space or K | Play or pause |
+| J / L | Seek back or forward 10 seconds |
+| ← / → | Jump to the previous or next segment or interaction |
+| ↓ / ↑ | Slow down or speed up |
+| F | Toggle fullscreen |
+| R | Restart the video |
 
-- Only work on google chrome (Doesn't work on Firefox; codec problems)
-- Download `Bandersnatch` video file (`5:12:14`)
-- Drag it on white box on [page](https://mohetios.github.io/BandersnatchInteractive/) :)
-- `Persian`, `English`, `Arabic`, `Spanish`, `Hebrew`, `Portuguese (Portugal)`, `Portuguese (Brazil)`, `Greek`, `Turkish`, `Polish`, `Indonesian`, `Russian` , `French` , `Hungarian` , `Korean` ,`German`, `chinese`, `Italian`
+## Change the video source
 
-\*subtitle available, If you want add another language subtitle, tell me.
+Edit `VIDEO_URL` in `assets/scripts.js` and rebuild the image. Use an HTTPS URL that streams the full 5:12:14 cut with the same scene timings and supports HTTP range requests. A browser-compatible encoding of that cut works with the existing choices and subtitles.
 
-- to change subtitle : right click on video , enable show controls , after that . on bottom,right you see menu icon (3 vertical dot) then you can subtitle section
-- Note : after change subtitle , disable show controls ,if dont disable it on full screen video,you cant see option selector
+## Credits
 
-## Controls
-
-- <kbd>F</kbd> - Toggle fullscreen
-- <kbd>R</kbd> - Restart video
-- <kbd>→</kbd> - Jump to the next segment (or to the next interaction zone)
-- <kbd>←</kbd> - Jump to the previous segment
-- <kbd>Space</kbd> - Toggle play and pause
-
-## Credit
-
-- based on [joric work](https://github.com/joric/bandersnatch)
+Based on the [original player by joric](https://github.com/joric/bandersnatch/), with contributions from [mohetios](https://github.com/mohetios) and [CyberShadow](https://github.com/CyberShadow).

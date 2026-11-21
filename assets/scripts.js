@@ -174,65 +174,48 @@ function newList(id) {
 	return ul;
 }
 let selectedDigits = [];
-function addItem(ul, text, url, TheChoice) {
-	if (TheChoice.type !== "scene:cs_bs_phone"){
-		var li = document.createElement("li");
-		var a = document.createElement("a");
-		if (TheChoice && TheChoice.image){
-			a.style.backgroundImage = TheChoice.image.styles.backgroundImage;
-			a.style.backgroundPosition = "center center";
-			a.style.backgroundSize = "10rem";
-			a.style.backgroundRepeat = TheChoice.image.styles.backgroundRepeat;
-		}else{
-			a.textContent = text;
+function addItem(ul, text, url, item) {
+	const li = document.createElement('li');
+	if (item.type !== 'scene:cs_bs_phone') {
+		const link = document.createElement('a');
+		if (item.image) {
+			link.className = 'image-choice';
+			link.style.backgroundImage = item.image.styles.backgroundImage;
+			link.style.backgroundPosition = 'center';
+			link.style.backgroundSize = 'contain';
+			link.style.backgroundRepeat = 'no-repeat';
+			link.setAttribute('aria-label', text);
+		} else {
+			link.textContent = text;
 		}
-		a.setAttribute('href', url);
-		li.appendChild(a);
-		ul.appendChild(li);
-	}else{
-		selectedDigits = []
-		
-		// Créer le conteneur des champs de saisie
-		var inputContainer = document.createElement('div');
-		inputContainer.className = 'input-container';
+		link.href = url;
+		li.append(link);
+	} else {
+		selectedDigits = [];
+		li.className = 'containerCode';
 
-		// Créer les champs de saisie
-		for (var i = 0; i < 5; i++) {
-			var inputField = document.createElement('span');
-			inputField.type = 'text';
-			inputField.className = 'inputField';
-			inputContainer.appendChild(inputField);
-		}
-		
-		// Créer l'espace entre les conteneurs
-		var lineBreak = document.createElement('br');
-		inputContainer.appendChild(lineBreak.cloneNode());
-		inputContainer.appendChild(lineBreak.cloneNode());
-
-		// Créer le conteneur des boutons
-		var buttonContainer = document.createElement('div');
-		buttonContainer.className = 'buttonsCode';
-
-		// Créer les éléments de la liste des boutons
-		for (var i = 0; i < 10; i++) {
-			var listItem = document.createElement('span');
-			listItem.className = "buttonCodeNumber"
-			listItem.textContent = i;
-			listItem.setAttribute('onclick', 'selectDigit(' + i + ')');
-			buttonContainer.appendChild(listItem);
+		const fields = document.createElement('div');
+		fields.className = 'input-container';
+		for (let index = 0; index < 5; index++) {
+			const field = document.createElement('span');
+			field.className = 'inputField';
+			fields.append(field);
 		}
 
-		// Ajouter les conteneurs au document
-		var containerCode = document.createElement('div');
-		containerCode.className = 'containerCode';
-		containerCode.appendChild(inputContainer);
-		containerCode.appendChild(buttonContainer);
-		
-		ul.appendChild(containerCode);
-		updateInputPlaceholders();
+		const keypad = document.createElement('div');
+		keypad.className = 'buttonsCode';
+		for (let digit = 0; digit < 10; digit++) {
+			const button = document.createElement('button');
+			button.type = 'button';
+			button.textContent = digit;
+			button.addEventListener('click', () => selectDigit(digit));
+			keypad.append(button);
+		}
+		li.append(fields, keypad);
 	}
-		
-	
+	ul.append(li);
+	if (li.className === 'containerCode')
+		updateInputPlaceholders();
 }
 
 var nextChoice = -1;
@@ -586,176 +569,221 @@ function toggleFullScreen() {
 	}
 }
 
-function togglePlayPause() {
-	var v = document.getElementById("video");
-	if (v.paused) v.play();
-	else v.pause();
-}
-window.onload = function() {
-	var video_selector = document.getElementById("video");
-	var video_source_selector = document.getElementById("video-source");
-	var file_selector = document.getElementById("file-selector");
-	function startPlayback() {
-		file_selector.style.display = 'none';
-		if (window.location.hash)
-			playHash(window.location.hash);
-		else if (ls.place)
-			playHash(ls.place);
-		else
+const VIDEO_URL = 'https://drive.haina.id.vn/f/dyfz/movie.mkv';
+
+document.addEventListener('DOMContentLoaded', function () {
+	const video = document.getElementById('video');
+	const player = document.getElementById('wrapper-video');
+	const startScreen = document.getElementById('start-screen');
+	const startButton = document.getElementById('start-button');
+	const startLabel = document.getElementById('start-label');
+	const status = document.getElementById('start-status');
+	const choiceTranslation = document.getElementById('choice-translation');
+	const controls = document.getElementById('video-controls');
+	const seekBar = document.getElementById('seek-bar');
+	const timeDisplay = document.getElementById('time-display');
+	const playButton = document.getElementById('btn-play');
+	const subtitles = document.getElementById('subtitles');
+
+	let starting = false;
+	let timelineReady = false;
+	let dragging = false;
+	let hideTimer;
+
+	choiceTranslation.addEventListener('change', function () {
+		translated_choices = window[choiceTranslation.value];
+		momentsBySegment = switch_choices();
+	});
+
+	document.getElementById('reset-history').addEventListener('click', function () {
+		if (confirm('Reset all choices, breadcrumbs, and watched scenes?'))
+			reset();
+	});
+
+	function prepareTimeline() {
+		if (!starting || timelineReady || video.readyState < HTMLMediaElement.HAVE_METADATA)
+			return;
+
+		timelineReady = true;
+		if (!playHash(window.location.hash) && !playHash(ls.place))
 			playSegment(null);
-		video_selector.play();
 	}
-	if (video_source_selector.getAttribute("src") == '') {
-		console.log('no video');
-		file_selector.style.display = 'table';
-		document.getElementById("wrapper-video").style.display = 'none';
-	} else {
-		startPlayback();
+
+	function showMediaError() {
+		const wasPlaying = !player.hidden;
+		const moveFocus = wasPlaying || starting;
+		const mediaError = video.error;
+		starting = false;
+		timelineReady = false;
+		lastHash = '';
+		clearTimeout(timerId);
+		timerId = 0;
+		player.hidden = true;
+		startScreen.hidden = false;
+		startButton.disabled = false;
+		startLabel.textContent = 'Retry';
+		status.textContent = mediaError && mediaError.code === MediaError.MEDIA_ERR_NETWORK
+			? 'The video connection was interrupted. Try again to resume.'
+			: 'The video could not be opened. Try again or use Chrome or Edge on a device with HEVC support.';
+		if (document.fullscreenElement)
+			document.exitFullscreen().catch(() => {});
+		if (moveFocus)
+			startButton.focus();
 	}
-	document.getElementById('fileinput').addEventListener('change', function () {
-		var file = this.files[0];
-		var fileUrl = URL.createObjectURL(file);
-		video_selector.src = fileUrl;
-		document.getElementById("wrapper-video").style.display = 'block';
-		startPlayback();
-	}, false);
 
-	video_selector.ontimeupdate = ontimeupdate;
-
-	// Custom video controls wiring
-	var seekBar = document.getElementById("seek-bar");
-	var timeDisplay = document.getElementById("time-display");
-	var btnReplay = document.getElementById("btn-replay");
-	var btnForward = document.getElementById("btn-forward");
-	var btnPlay = document.getElementById("btn-play");
-	var btnFs = document.getElementById("btn-fullscreen");
-	var controlsBar = document.getElementById("video-controls");
-
-	function durationMs() { return (video_selector.duration || 0) * 1000.0; }
-
-	function updateSeekBar() {
-		var curMs = video_selector.currentTime * 1000.0;
-		var durMs = durationMs();
-		if (seekBar && durMs > 0) {
-			// don't fight the user while they're dragging
-			if (!seekBar._dragging)
-				seekBar.value = Math.round((curMs / durMs) * seekBar.max);
+	async function playVideo() {
+		try {
+			await video.play();
+			if (starting) {
+				starting = false;
+				startScreen.hidden = true;
+				player.hidden = false;
+				startButton.disabled = false;
+				startLabel.textContent = 'Play film';
+				status.textContent = '';
+				video.focus();
+			}
+		} catch (error) {
+			if (video.error) {
+				showMediaError();
+			} else if (starting) {
+				starting = false;
+				startButton.disabled = false;
+				startLabel.textContent = 'Play film';
+				status.textContent = 'Playback could not start. Press Play to try again.';
+				startButton.focus();
+			}
 		}
-		if (timeDisplay)
-			timeDisplay.textContent = formatTime(curMs) + ' / ' + formatTime(durMs);
-		if (btnPlay)
-			btnPlay.textContent = video_selector.paused ? '\u25B6' : '\u23F8';
 	}
 
-	if (btnReplay) btnReplay.onclick = function () { seekBy(-10000); };
-	if (btnForward) btnForward.onclick = function () { seekBy(10000); };
-	if (btnPlay) btnPlay.onclick = function () { togglePlayPause(); };
-	if (btnFs) btnFs.onclick = function () { toggleFullScreen(); };
-
-	if (seekBar) {
-		seekBar.addEventListener('input', function () {
-			seekBar._dragging = true;
-			var durMs = durationMs();
-			if (durMs > 0) {
-				var targetMs = (seekBar.value / seekBar.max) * durMs;
-				if (timeDisplay)
-					timeDisplay.textContent = formatTime(targetMs) + ' / ' + formatTime(durMs);
-			}
-		});
-		seekBar.addEventListener('change', function () {
-			var durMs = durationMs();
-			if (durMs > 0) {
-				var targetMs = (seekBar.value / seekBar.max) * durMs;
-				seek(Math.round(targetMs));
-			}
-			seekBar._dragging = false;
-			seekBar.blur();
-		});
-		// keyboard scrubbing on the bar itself
-		seekBar.addEventListener('keydown', function (e) {
-			if (e.key == 'ArrowLeft') { seekBy(-5000); e.preventDefault(); }
-			if (e.key == 'ArrowRight') { seekBy(5000); e.preventDefault(); }
-			e.stopPropagation(); // don't also trigger the segment jump / speed shortcuts
-		});
+	function togglePlayPause() {
+		if (video.paused)
+			playVideo();
+		else
+			video.pause();
 	}
 
-	// keep the bar + time in sync on progress and play/pause
-	video_selector.addEventListener('timeupdate', updateSeekBar);
-	video_selector.addEventListener('durationchange', updateSeekBar);
-	video_selector.addEventListener('play', updateSeekBar);
-	video_selector.addEventListener('pause', updateSeekBar);
-	video_selector.addEventListener('loadedmetadata', updateSeekBar);
+	video.addEventListener('loadedmetadata', prepareTimeline);
+	video.addEventListener('error', showMediaError);
+	video.addEventListener('timeupdate', function () {
+		if (timelineReady)
+			ontimeupdate();
+	});
 
-	// auto-hide the custom controls when idle + show on mouse move
-	var hideTimerId = 0;
+	startButton.addEventListener('click', function () {
+		starting = true;
+		startButton.disabled = true;
+		startLabel.textContent = 'Loading…';
+		status.textContent = '';
+		if (video.error)
+			video.load();
+		prepareTimeline();
+		playVideo();
+	});
+
+	if (VIDEO_URL) {
+		video.src = VIDEO_URL;
+	} else {
+		startButton.disabled = true;
+		status.textContent = 'Video source pending.';
+	}
+
+	function updateControls() {
+		const duration = video.duration || 0;
+		const currentTime = dragging ? (seekBar.value / seekBar.max) * duration : video.currentTime;
+		if (duration > 0 && !dragging)
+			seekBar.value = Math.round((currentTime / duration) * seekBar.max);
+		timeDisplay.textContent = formatTime(currentTime * 1000) + ' / ' + formatTime(duration * 1000);
+		playButton.textContent = video.paused ? '▶' : '❚❚';
+		playButton.setAttribute('aria-label', video.paused ? 'Play' : 'Pause');
+	}
+
+	playButton.addEventListener('click', togglePlayPause);
+	document.getElementById('btn-replay').addEventListener('click', () => seekBy(-10000));
+	document.getElementById('btn-forward').addEventListener('click', () => seekBy(10000));
+	document.getElementById('btn-fullscreen').addEventListener('click', toggleFullScreen);
+
+	seekBar.addEventListener('input', function () {
+		dragging = true;
+		updateControls();
+	});
+	seekBar.addEventListener('change', function () {
+		dragging = false;
+		if (Number.isFinite(video.duration))
+			seek(Math.round((seekBar.value / seekBar.max) * video.duration * 1000));
+		updateControls();
+	});
+	seekBar.addEventListener('pointercancel', function () {
+		dragging = false;
+		updateControls();
+	});
+	seekBar.addEventListener('keydown', function (event) {
+		if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+			event.preventDefault();
+			seekBy(event.key === 'ArrowLeft' ? -5000 : 5000);
+		}
+	});
+
+	for (const event of ['timeupdate', 'durationchange', 'play', 'pause', 'seeked'])
+		video.addEventListener(event, updateControls);
+
+	const tracks = Array.from(video.textTracks);
+	for (const [index, track] of tracks.entries())
+		subtitles.add(new Option(track.label, String(index)));
+
+	function updateSubtitles() {
+		const activeTrack = tracks.findIndex(track => track.mode === 'showing');
+		subtitles.value = activeTrack < 0 ? '' : String(activeTrack);
+	}
+
+	subtitles.addEventListener('change', function () {
+		for (const [index, track] of tracks.entries())
+			track.mode = String(index) === subtitles.value ? 'showing' : 'disabled';
+	});
+	video.textTracks.addEventListener('change', updateSubtitles);
+	updateSubtitles();
+
 	function showControls() {
-		controlsBar && (controlsBar.style.opacity = '1');
-		controlsBar && (controlsBar.style.pointerEvents = 'auto');
-		if (hideTimerId) clearTimeout(hideTimerId);
-		hideTimerId = setTimeout(function () {
-			if (!video_selector.paused) {
-				controlsBar && (controlsBar.style.opacity = '0');
-				controlsBar && (controlsBar.style.pointerEvents = 'none');
-			}
-		}, 3000);
-	}
-	if (controlsBar) {
-		// #c toggles fullscreen on dblclick; double-clicking +10s must not
-		controlsBar.addEventListener('dblclick', function (e) { e.stopPropagation(); });
-		// drop focus after a click so Space isn't handled twice (keypress + button click)
-		controlsBar.addEventListener('click', function (e) {
-			if (e.target.tagName == 'BUTTON') e.target.blur();
-		});
-		showControls();
-		video_selector.addEventListener('mousemove', showControls);
-		document.getElementById('wrapper-video').addEventListener('mousemove', showControls);
-		video_selector.addEventListener('play', showControls);
-		video_selector.addEventListener('pause', showControls);
+		controls.classList.add('is-visible');
+		clearTimeout(hideTimer);
+		if (!video.paused)
+			hideTimer = setTimeout(() => controls.classList.remove('is-visible'), 3000);
 	}
 
-	var c = document.getElementById("c");
-	c.ondblclick = toggleFullScreen;
-	video_selector.onclick = function (e) {
-		togglePlayPause();
-		e.preventDefault();
-	};
+	player.addEventListener('pointermove', showControls);
+	video.addEventListener('play', showControls);
+	video.addEventListener('pause', showControls);
+	video.addEventListener('click', togglePlayPause);
+	video.addEventListener('dblclick', toggleFullScreen);
 
-	document.onkeypress = function (e) {
-		if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey)
+	document.addEventListener('keydown', function (event) {
+		if (player.hidden || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey)
 			return;
-		if (e.code == 'KeyF')
-			toggleFullScreen();
-		if (e.code == 'KeyR')
-			playSegment(0);
-		if (e.code == 'Space' || e.code == 'KeyK')
-			togglePlayPause();
-		if (e.code == 'KeyJ')
-			seekBy(-10000);
-		if (e.code == 'KeyL')
-			seekBy(10000);
-	};
-	video_selector.onkeydown = function(e) {
-		if (e.code == 'Space')
-			e.preventDefault();
-	};
-
-	document.onkeydown = function (e) {
-		if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey)
+		if (event.target instanceof Element
+			&& (event.target.closest('input, select') || (event.code === 'Space' && event.target.closest('button, a'))))
 			return;
-		if (e.key == 'ArrowLeft')
-			jumpBack();
-		if (e.key == 'ArrowRight')
-			jumpForward();
-		if (e.key == 'ArrowUp')
-			video_selector.playbackRate = video_selector.playbackRate * 2.0;
-		if (e.key == 'ArrowDown')
-			video_selector.playbackRate = video_selector.playbackRate / 2.0;
-	};
 
-	window.onhashchange = function() {
-		playHash(window.location.hash);
-	};
-};
+		switch (event.code) {
+			case 'KeyF': toggleFullScreen(); break;
+			case 'KeyR': playSegment(null); break;
+			case 'Space':
+			case 'KeyK': togglePlayPause(); break;
+			case 'KeyJ': seekBy(-10000); break;
+			case 'KeyL': seekBy(10000); break;
+			case 'ArrowLeft': jumpBack(); break;
+			case 'ArrowRight': jumpForward(); break;
+			case 'ArrowUp': video.playbackRate *= 2; break;
+			case 'ArrowDown': video.playbackRate /= 2; break;
+			default: return;
+		}
+		event.preventDefault();
+	});
+
+	window.addEventListener('hashchange', function () {
+		if (timelineReady)
+			playHash(window.location.hash);
+	});
+});
 
 function seek(ms) {
 	console.log('seek', ms);
@@ -826,21 +854,25 @@ function reset() {
 
 var lastHash = '';
 function playHash(hash) {
-	// console.log('playHash', lastHash, '->', hash);
-	if (hash == lastHash)
-		return;
-	lastHash = hash;
-	if (hash) {
-		hash = hash.slice(1);
-		if (hash[0] == 't')
-			seek(Number(Math.round(hash.slice(1) * 1000.0)));
-		else {
-			let loc = hash.split('/');
-			let segmentId = loc[0];
-			if (loc.length > 1)
-				seek(momentsBySegment[segmentId][loc[1]].startMs);
-			else
-				seek(getSegmentMs(segmentId));
-		}
+	if (!hash)
+		return false;
+	if (hash === lastHash)
+		return true;
+
+	const [location, momentId] = hash.slice(1).split('/');
+	let ms;
+	if (location[0] === 't') {
+		ms = Math.round(Number(location.slice(1)) * 1000);
+	} else if (momentId !== undefined) {
+		ms = momentsBySegment[location]?.[momentId]?.startMs;
+	} else {
+		ms = segmentMap.segments[location]?.startTimeMs;
 	}
+
+	if (!Number.isFinite(ms))
+		return false;
+
+	lastHash = hash;
+	seek(ms);
+	return true;
 }
