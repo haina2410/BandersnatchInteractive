@@ -173,49 +173,100 @@ function newList(id) {
 	}
 	return ul;
 }
-let selectedDigits = [];
-function addItem(ul, text, url, item) {
-	const li = document.createElement('li');
-	if (item.type !== 'scene:cs_bs_phone') {
-		const link = document.createElement('a');
-		if (item.image) {
-			link.className = 'image-choice';
-			link.style.backgroundImage = item.image.styles.backgroundImage;
-			link.style.backgroundPosition = 'center';
-			link.style.backgroundSize = 'contain';
-			link.style.backgroundRepeat = 'no-repeat';
-			link.setAttribute('aria-label', text);
-		} else {
-			link.textContent = text;
-		}
-		link.href = url;
-		li.append(link);
-	} else {
-		selectedDigits = [];
-		li.className = 'containerCode';
+// Viewer preferences. They stay when the saved choices are erased.
+function getPref(name) {
+	return ls['pref_' + name];
+}
 
-		const fields = document.createElement('div');
-		fields.className = 'input-container';
-		for (let index = 0; index < 5; index++) {
-			const field = document.createElement('span');
-			field.className = 'inputField';
-			fields.append(field);
-		}
-
-		const keypad = document.createElement('div');
-		keypad.className = 'buttonsCode';
-		for (let digit = 0; digit < 10; digit++) {
-			const button = document.createElement('button');
-			button.type = 'button';
-			button.textContent = digit;
-			button.addEventListener('click', () => selectDigit(digit));
-			keypad.append(button);
-		}
-		li.append(fields, keypad);
+function setPref(name, value) {
+	try {
+		ls['pref_' + name] = String(value);
+	} catch (error) {
+		// Storage can be full or blocked. The preference then applies to this visit only.
 	}
+}
+
+// Links for the hidden debug lists.
+function addItem(ul, text, url) {
+	const li = document.createElement('li');
+	const link = document.createElement('a');
+	link.textContent = text;
+	link.href = url;
+	li.append(link);
 	ul.append(li);
-	if (li.className === 'containerCode')
-		updateInputPlaceholders();
+}
+
+const CODE_LENGTH = 5;
+let selectedDigits = [];
+let codeLocked = false;
+var currentChoiceMoment = null;
+
+function addChoiceButton(ul, item, index) {
+	const li = document.createElement('li');
+	const button = document.createElement('button');
+	button.type = 'button';
+	button.className = 'choice';
+	button.setAttribute('aria-pressed', 'false');
+
+	const key = document.createElement('span');
+	key.className = 'choice-key';
+	key.setAttribute('aria-hidden', 'true');
+	key.textContent = index + 1;
+
+	const label = document.createElement('span');
+	label.className = 'choice-text';
+	if (item.image) {
+		button.classList.add('choice-image');
+		button.setAttribute('aria-label', item.text);
+		label.style.backgroundImage = item.image.styles.backgroundImage;
+
+		// Show the words when the picture does not load.
+		const picture = new Image();
+		picture.onerror = function () {
+			button.classList.remove('choice-image');
+			label.style.backgroundImage = '';
+			label.textContent = item.text;
+		};
+		picture.src = item.image.styles.backgroundImage.replace(/^url\(["']?|["']?\)$/g, '');
+	} else {
+		label.textContent = item.text;
+	}
+
+	button.append(key, label);
+	button.addEventListener('click', () => choice(index));
+	li.append(button);
+	ul.append(li);
+}
+
+function addKeypad(ul) {
+	selectedDigits = [];
+	codeLocked = false;
+
+	const li = document.createElement('li');
+	li.className = 'containerCode';
+
+	const fields = document.createElement('div');
+	fields.className = 'input-container';
+	fields.setAttribute('role', 'img');
+	for (let index = 0; index < CODE_LENGTH; index++) {
+		const field = document.createElement('span');
+		field.className = 'inputField';
+		fields.append(field);
+	}
+
+	const keypad = document.createElement('div');
+	keypad.className = 'buttonsCode';
+	for (const digit of [1, 2, 3, 4, 5, 6, 7, 8, 9, 0]) {
+		const button = document.createElement('button');
+		button.type = 'button';
+		button.textContent = digit;
+		button.addEventListener('click', () => selectDigit(digit));
+		keypad.append(button);
+	}
+
+	li.append(fields, keypad);
+	ul.append(li);
+	updateCode();
 }
 
 var nextChoice = -1;
@@ -251,68 +302,87 @@ function addZones(segmentId) {
 
 
 function selectDigit(digit) {
-	if (selectedDigits.length <= 5) {
-		const emptyInputField = getEmptyInputField();
-		if (emptyInputField) {
-			emptyInputField.innerText  = digit;
-			selectedDigits.push(digit);
-		}
+	if (codeLocked || selectedDigits.length >= CODE_LENGTH)
+		return;
 
-		if (selectedDigits.length >= 5) {
-			var code = selectedDigits.join('');
-			if (code == "20541"){
-				choice(0);
-			} else{
-				choice(1);
-			}
-		}
-	}	
-	
+	selectedDigits.push(digit);
+	updateCode();
 
-	updateInputPlaceholders();
-}
-
-function updateInputPlaceholders() {
-	
-	const inputFields = document.querySelectorAll('.inputField');
-	for (let i = 0; i < inputFields.length; i++) {
-		if (inputFields[i].textContent === '') {
-			inputFields[i].textContent = "-";
-		}
+	if (selectedDigits.length == CODE_LENGTH) {
+		codeLocked = true;
+		for (const button of document.querySelectorAll('.buttonsCode button'))
+			button.disabled = true;
+		let code = currentChoiceMoment.choices[0].code || '20541';
+		choice(selectedDigits.join('') == code ? 0 : 1);
 	}
 }
 
-function getEmptyInputField() {
-	
-	const inputFields = document.querySelectorAll('.inputField');
-	for (let i = 0; i < inputFields.length; i++) {
-		if (inputFields[i].textContent === '-') {
-			return inputFields[i];
-		}
+function deleteDigit() {
+	if (codeLocked || !selectedDigits.length)
+		return false;
+	selectedDigits.pop();
+	updateCode();
+	return true;
+}
+
+function updateCode() {
+	const fields = document.querySelectorAll('.inputField');
+	fields.forEach((field, index) => {
+		field.textContent = index < selectedDigits.length ? selectedDigits[index] : '';
+	});
+	if (fields.length)
+		fields[0].parentNode.setAttribute('aria-label', 'Number: ' + (selectedDigits.join(' ') || 'empty'));
+}
+
+// A number key picks a choice, or types a digit when the keypad shows.
+function pressChoiceKey(digit) {
+	if (!currentChoiceMoment)
+		return false;
+	if (document.querySelector('.containerCode')) {
+		selectDigit(digit);
+		return true;
 	}
-	
-	return null;
+	if (digit >= 1 && digit <= document.querySelectorAll('#choices .choice').length) {
+		choice(digit - 1);
+		return true;
+	}
+	return false;
+}
+
+function setChoiceHint(text) {
+	const hint = document.getElementById("choiceHint");
+	hint.textContent = text;
+	hint.hidden = !text;
+}
+
+function markChoice(choiceIndex) {
+	const ul = document.getElementById("choices");
+	ul.classList.add('has-pick');
+	ul.querySelectorAll('.choice').forEach((button, index) => {
+		button.setAttribute('aria-pressed', String(index == choiceIndex));
+	});
+	setChoiceHint('');
 }
 
 function addChoices(r) {
 	currentChoiceMoment = r;
 	nextChoice = -1;
 	var ul = newList("choices");
+	ul.classList.remove('has-pick');
+	setChoiceHint('');
 	document.getElementById("choiceCaption").innerHTML = '';
 	if (!r) return;
 
 	nextChoice = r.defaultChoiceIndex;
-	if (r.type == "scene:cs_bs_phone"){
-		addItem(ul, "", "", r);
-	}else{
-		let index = 0;
-		for (let x of r.choices) {
-			var caption = r.defaultChoiceIndex == index ? '[' + x.text + ']' : x.text;
-			addItem(ul, caption, 'javascript:choice(' + index + ')', x);
-			index++;
-		}
+	if (r.type == "scene:cs_bs_phone") {
+		addKeypad(ul);
+		setChoiceHint('Enter the 5-digit number.');
+	} else {
+		r.choices.forEach((x, index) => addChoiceButton(ul, x, index));
+		let fallback = r.choices[r.defaultChoiceIndex];
+		if (r.choices.length > 1 && fallback && fallback.text)
+			setChoiceHint('No answer picks ' + fallback.text + '.');
 	}
-	
 
 	if (r.id in choicePoints)
 		document.getElementById("choiceCaption").innerHTML = choicePoints[r.id].description;
@@ -375,6 +445,8 @@ function ontimeupdate(evt) {
 		console.log('ontimeupdate', lastSegment, '->', currentSegment, ms, msToString(ms), seeked);
 		prevSegment = lastSegment;
 		lastSegment = currentSegment;
+		if (currentSegment)
+			ls['seen_' + currentSegment] = '1';
 		if (!seeked && prevSegment) {
 			if (playNextSegment(prevSegment)) {
 				// playSegment decided to seek, which means that this
@@ -577,35 +649,89 @@ document.addEventListener('DOMContentLoaded', function () {
 	const startScreen = document.getElementById('start-screen');
 	const startButton = document.getElementById('start-button');
 	const startLabel = document.getElementById('start-label');
+	const restartButton = document.getElementById('restart-button');
+	const resetButton = document.getElementById('reset-history');
+	const resetConfirm = document.getElementById('reset-confirm');
+	const muteButton = document.getElementById('btn-mute');
+	const volumeBar = document.getElementById('volume');
+	const speed = document.getElementById('speed');
+	const buffering = document.getElementById('buffering');
+	const toastBox = document.getElementById('toast');
+	const SPEEDS = Array.from(speed.options, option => Number(option.value));
 	const status = document.getElementById('start-status');
 	const choiceTranslation = document.getElementById('choice-translation');
 	const controls = document.getElementById('video-controls');
-	const seekBar = document.getElementById('seek-bar');
-	const timeDisplay = document.getElementById('time-display');
 	const playButton = document.getElementById('btn-play');
 	const subtitles = document.getElementById('subtitles');
 
 	let starting = false;
 	let timelineReady = false;
-	let dragging = false;
 	let hideTimer;
+	let toastTimer;
+	let bufferTimer;
+	let startOver = false;
+	let controlsWereVisible = false;
 
-	choiceTranslation.addEventListener('change', function () {
+	function applyChoiceLanguage() {
 		translated_choices = window[choiceTranslation.value];
 		momentsBySegment = switch_choices();
+	}
+
+	choiceTranslation.addEventListener('change', function () {
+		applyChoiceLanguage();
+		setPref('choices', choiceTranslation.value);
 	});
 
-	document.getElementById('reset-history').addEventListener('click', function () {
-		if (confirm('Reset all choices, breadcrumbs, and watched scenes?'))
-			reset();
-	});
+	// Use the saved language, or the browser language when the film has it.
+	const preferredLanguage = getPref('choices') || (navigator.language || '').slice(0, 2);
+	if (preferredLanguage !== choiceTranslation.value
+		&& Array.from(choiceTranslation.options).some(option => option.value === preferredLanguage)) {
+		choiceTranslation.value = preferredLanguage;
+		applyChoiceLanguage();
+	}
+
+	function showResetConfirm(show) {
+		resetButton.hidden = show;
+		resetConfirm.hidden = !show;
+		(show ? document.getElementById('reset-no') : resetButton).focus();
+	}
+
+	resetButton.addEventListener('click', () => showResetConfirm(true));
+	document.getElementById('reset-no').addEventListener('click', () => showResetConfirm(false));
+	document.getElementById('reset-yes').addEventListener('click', reset);
+
+	// The start screen offers to continue when there is a saved or linked place.
+	function refreshStart() {
+		const canResume = Boolean(ls.place) || window.location.hash.length > 1;
+		startLabel.textContent = canResume ? 'Continue watching' : 'Play film';
+		restartButton.hidden = !canResume;
+		document.getElementById('scenes-seen').textContent =
+			'Scenes seen: ' + countScenesSeen() + ' of ' + Object.keys(segmentMap.segments).length;
+	}
+
+	function setLoading(loading) {
+		startScreen.classList.toggle('is-loading', loading);
+		startButton.disabled = loading;
+		restartButton.disabled = loading;
+		if (loading)
+			startLabel.textContent = 'Loading…';
+		else
+			refreshStart();
+	}
+
+	function toast(text) {
+		toastBox.textContent = text;
+		toastBox.hidden = false;
+		clearTimeout(toastTimer);
+		toastTimer = setTimeout(() => { toastBox.hidden = true; }, 1200);
+	}
 
 	function prepareTimeline() {
 		if (!starting || timelineReady || video.readyState < HTMLMediaElement.HAVE_METADATA)
 			return;
 
 		timelineReady = true;
-		if (!playHash(window.location.hash) && !playHash(ls.place))
+		if (startOver || (!playHash(window.location.hash) && !playHash(ls.place)))
 			playSegment(null);
 	}
 
@@ -620,11 +746,11 @@ document.addEventListener('DOMContentLoaded', function () {
 		timerId = 0;
 		player.hidden = true;
 		startScreen.hidden = false;
-		startButton.disabled = false;
-		startLabel.textContent = 'Retry';
+		setLoading(false);
+		startLabel.textContent = 'Try again';
 		status.textContent = mediaError && mediaError.code === MediaError.MEDIA_ERR_NETWORK
-			? 'The video connection was interrupted. Try again to resume.'
-			: 'The video could not be opened. Try again or use Chrome or Edge on a device with HEVC support.';
+			? 'The connection to the video stopped. Try again to continue.'
+			: 'This browser could not open the video. Try again, or use Chrome or Edge on a device that plays HEVC video.';
 		if (document.fullscreenElement)
 			document.exitFullscreen().catch(() => {});
 		if (moveFocus)
@@ -638,19 +764,18 @@ document.addEventListener('DOMContentLoaded', function () {
 				starting = false;
 				startScreen.hidden = true;
 				player.hidden = false;
-				startButton.disabled = false;
-				startLabel.textContent = 'Play film';
+				setLoading(false);
 				status.textContent = '';
 				video.focus();
+				showControls();
 			}
 		} catch (error) {
 			if (video.error) {
 				showMediaError();
 			} else if (starting) {
 				starting = false;
-				startButton.disabled = false;
-				startLabel.textContent = 'Play film';
-				status.textContent = 'Playback could not start. Press Play to try again.';
+				setLoading(false);
+				status.textContent = 'The film did not start. Select the button again.';
 				startButton.focus();
 			}
 		}
@@ -670,16 +795,34 @@ document.addEventListener('DOMContentLoaded', function () {
 			ontimeupdate();
 	});
 
-	startButton.addEventListener('click', function () {
+	function begin(fromStart) {
 		starting = true;
-		startButton.disabled = true;
-		startLabel.textContent = 'Loading…';
+		startOver = fromStart;
+		setLoading(true);
 		status.textContent = '';
 		if (video.error)
 			video.load();
+		if (timelineReady && fromStart)
+			playSegment(null);
 		prepareTimeline();
 		playVideo();
-	});
+	}
+
+	startButton.addEventListener('click', () => begin(false));
+	restartButton.addEventListener('click', () => begin(true));
+	refreshStart();
+
+	function exitToMenu() {
+		video.pause();
+		if (document.fullscreenElement)
+			document.exitFullscreen().catch(() => {});
+		player.hidden = true;
+		startScreen.hidden = false;
+		refreshStart();
+		startButton.focus();
+	}
+
+	document.getElementById('btn-exit').addEventListener('click', exitToMenu);
 
 	if (VIDEO_URL) {
 		video.src = VIDEO_URL;
@@ -689,43 +832,78 @@ document.addEventListener('DOMContentLoaded', function () {
 	}
 
 	function updateControls() {
-		const duration = video.duration || 0;
-		const currentTime = dragging ? (seekBar.value / seekBar.max) * duration : video.currentTime;
-		if (duration > 0 && !dragging)
-			seekBar.value = Math.round((currentTime / duration) * seekBar.max);
-		timeDisplay.textContent = formatTime(currentTime * 1000) + ' / ' + formatTime(duration * 1000);
-		playButton.textContent = video.paused ? '▶' : '❚❚';
+		playButton.dataset.state = video.paused ? 'paused' : 'playing';
 		playButton.setAttribute('aria-label', video.paused ? 'Play' : 'Pause');
 	}
 
 	playButton.addEventListener('click', togglePlayPause);
 	document.getElementById('btn-replay').addEventListener('click', () => seekBy(-10000));
 	document.getElementById('btn-forward').addEventListener('click', () => seekBy(10000));
+	document.getElementById('btn-previous').addEventListener('click', jumpBack);
+	document.getElementById('btn-next').addEventListener('click', jumpForward);
 	document.getElementById('btn-fullscreen').addEventListener('click', toggleFullScreen);
 
-	seekBar.addEventListener('input', function () {
-		dragging = true;
-		updateControls();
-	});
-	seekBar.addEventListener('change', function () {
-		dragging = false;
-		if (Number.isFinite(video.duration))
-			seek(Math.round((seekBar.value / seekBar.max) * video.duration * 1000));
-		updateControls();
-	});
-	seekBar.addEventListener('pointercancel', function () {
-		dragging = false;
-		updateControls();
-	});
-	seekBar.addEventListener('keydown', function (event) {
-		if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-			event.preventDefault();
-			seekBy(event.key === 'ArrowLeft' ? -5000 : 5000);
-		}
-	});
-
-	for (const event of ['timeupdate', 'durationchange', 'play', 'pause', 'seeked'])
+	for (const event of ['play', 'pause'])
 		video.addEventListener(event, updateControls);
+
+	// Volume
+	const savedVolume = Number(getPref('volume'));
+	if (getPref('volume') !== undefined && savedVolume >= 0 && savedVolume <= 1)
+		video.volume = savedVolume;
+	video.muted = getPref('muted') === 'true';
+
+	function updateVolume() {
+		const silent = video.muted || video.volume === 0;
+		volumeBar.value = silent ? 0 : Math.round(video.volume * 100);
+		volumeBar.style.setProperty('--fill', volumeBar.value + '%');
+		muteButton.dataset.state = silent ? 'muted' : 'on';
+		muteButton.setAttribute('aria-label', silent ? 'Unmute' : 'Mute');
+		setPref('volume', video.volume);
+		setPref('muted', video.muted);
+	}
+
+	function toggleMute() {
+		if (video.muted || video.volume === 0) {
+			video.muted = false;
+			if (video.volume === 0)
+				video.volume = 0.5;
+		} else {
+			video.muted = true;
+		}
+	}
+
+	muteButton.addEventListener('click', toggleMute);
+	volumeBar.addEventListener('input', function () {
+		video.volume = volumeBar.value / 100;
+		video.muted = false;
+	});
+	video.addEventListener('volumechange', updateVolume);
+	updateVolume();
+
+	// Speed
+	function stepSpeed(direction) {
+		let index = SPEEDS.indexOf(video.playbackRate);
+		if (index < 0)
+			index = SPEEDS.indexOf(1);
+		video.playbackRate = SPEEDS[Math.min(SPEEDS.length - 1, Math.max(0, index + direction))];
+		toast(video.playbackRate + '×');
+	}
+
+	speed.addEventListener('change', () => { video.playbackRate = Number(speed.value); });
+	video.addEventListener('ratechange', () => { speed.value = String(video.playbackRate); });
+
+	// Show the loading sign only when the wait is longer than a moment.
+	function setBuffering(waiting) {
+		clearTimeout(bufferTimer);
+		if (waiting)
+			bufferTimer = setTimeout(() => { buffering.hidden = false; }, 400);
+		else
+			buffering.hidden = true;
+	}
+
+	video.addEventListener('waiting', () => setBuffering(true));
+	for (const event of ['playing', 'canplay', 'error', 'emptied'])
+		video.addEventListener(event, () => setBuffering(false));
 
 	const tracks = Array.from(video.textTracks);
 	for (const [index, track] of tracks.entries())
@@ -736,24 +914,59 @@ document.addEventListener('DOMContentLoaded', function () {
 		subtitles.value = activeTrack < 0 ? '' : String(activeTrack);
 	}
 
-	subtitles.addEventListener('change', function () {
+	function showSubtitles(value) {
 		for (const [index, track] of tracks.entries())
-			track.mode = String(index) === subtitles.value ? 'showing' : 'disabled';
+			track.mode = String(index) === value ? 'showing' : 'disabled';
+	}
+
+	subtitles.addEventListener('change', function () {
+		showSubtitles(subtitles.value);
+		setPref('subtitles', subtitles.value === '' ? '' : tracks[Number(subtitles.value)].label);
 	});
 	video.textTracks.addEventListener('change', updateSubtitles);
+
+	// Apply the saved subtitle language. Without one, the default track shows.
+	const savedSubtitles = getPref('subtitles');
+	if (savedSubtitles !== undefined) {
+		for (const element of video.querySelectorAll('track[default]'))
+			element.removeAttribute('default');
+		const index = tracks.findIndex(track => track.label === savedSubtitles);
+		showSubtitles(index < 0 ? '' : String(index));
+	}
 	updateSubtitles();
 
 	function showControls() {
-		controls.classList.add('is-visible');
+		player.classList.add('controls-visible');
+		player.classList.remove('is-idle');
 		clearTimeout(hideTimer);
 		if (!video.paused)
-			hideTimer = setTimeout(() => controls.classList.remove('is-visible'), 3000);
+			hideTimer = setTimeout(hideControls, 3000);
 	}
 
+	function hideControls() {
+		// Stay visible while the pointer is on the playback bar.
+		if (controls.matches(':hover')) {
+			hideTimer = setTimeout(hideControls, 3000);
+			return;
+		}
+		player.classList.remove('controls-visible');
+		player.classList.add('is-idle');
+	}
+
+	player.addEventListener('pointerdown', function (event) {
+		controlsWereVisible = event.pointerType !== 'touch' || player.classList.contains('controls-visible');
+	}, true);
 	player.addEventListener('pointermove', showControls);
+	player.addEventListener('keydown', showControls);
 	video.addEventListener('play', showControls);
 	video.addEventListener('pause', showControls);
-	video.addEventListener('click', togglePlayPause);
+	video.addEventListener('click', function () {
+		// On a touch screen, the first tap only shows the controls.
+		if (controlsWereVisible)
+			togglePlayPause();
+		else
+			showControls();
+	});
 	video.addEventListener('dblclick', toggleFullScreen);
 
 	document.addEventListener('keydown', function (event) {
@@ -763,17 +976,29 @@ document.addEventListener('DOMContentLoaded', function () {
 			&& (event.target.closest('input, select') || (event.code === 'Space' && event.target.closest('button, a'))))
 			return;
 
+		const digit = /^(?:Digit|Numpad)(\d)$/.exec(event.code);
+		if (digit) {
+			if (pressChoiceKey(Number(digit[1])))
+				event.preventDefault();
+			return;
+		}
+
 		switch (event.code) {
 			case 'KeyF': toggleFullScreen(); break;
-			case 'KeyR': playSegment(null); break;
+			case 'KeyR': playSegment(null); toast('From the beginning'); break;
 			case 'Space':
 			case 'KeyK': togglePlayPause(); break;
-			case 'KeyJ': seekBy(-10000); break;
-			case 'KeyL': seekBy(10000); break;
-			case 'ArrowLeft': jumpBack(); break;
-			case 'ArrowRight': jumpForward(); break;
-			case 'ArrowUp': video.playbackRate *= 2; break;
-			case 'ArrowDown': video.playbackRate /= 2; break;
+			case 'KeyJ': seekBy(-10000); toast('−10 s'); break;
+			case 'KeyL': seekBy(10000); toast('+10 s'); break;
+			case 'KeyM': toggleMute(); toast(video.muted ? 'Sound off' : 'Sound on'); break;
+			case 'ArrowLeft': jumpBack(); toast('Previous scene'); break;
+			case 'ArrowRight': jumpForward(); toast('Next scene'); break;
+			case 'ArrowUp': stepSpeed(1); break;
+			case 'ArrowDown': stepSpeed(-1); break;
+			case 'Backspace':
+				if (!deleteDigit())
+					return;
+				break;
 			default: return;
 		}
 		event.preventDefault();
@@ -791,33 +1016,33 @@ function seek(ms) {
 	ontimeupdate(null);
 }
 
-// Seek relative to the current position (delta in milliseconds; negative rewinds).
-function seekBy(deltaMs) {
-	var v = document.getElementById("video");
-	var target = v.currentTime * 1000.0 + deltaMs;
-	if (target < 0) target = 0;
-	var durationMs = (v.duration || 0) * 1000.0;
-	if (durationMs && target > durationMs) target = durationMs;
-	seek(Math.round(target));
+// The start and end of the scene (segment) at the given timestamp.
+function getSceneRange(ms) {
+	var segment = segmentMap.segments[getSegmentId(ms)];
+	var durationMs = Math.round((document.getElementById("video").duration || 0) * 1000);
+	if (!segment)
+		return { startMs: 0, endMs: durationMs };
+	return { startMs: segment.startTimeMs, endMs: segment.endTimeMs || durationMs };
 }
 
-// Format milliseconds as m:ss or h:mm:ss.
-function formatTime(ms) {
-	if (!isFinite(ms) || ms < 0) ms = 0;
-	var s = Math.floor(ms / 1000);
-	var h = Math.floor(s / 3600);
-	s = s % 3600;
-	var m = Math.floor(s / 60);
-	s = s % 60;
-	var ss = (s < 10 ? '0' : '') + s;
-	if (h > 0)
-		return h + ':' + (m < 10 ? '0' : '') + m + ':' + ss;
-	return m + ':' + ss;
+// Seek, but stay in the scene. A seek past the end stops just before it, and
+// the film then continues to the scene that the choices select.
+function seekInScene(scene, ms) {
+	var lastMs = Math.max(scene.startMs, scene.endMs - 500);
+	seek(Math.round(Math.min(lastMs, Math.max(scene.startMs, ms))));
+}
+
+// Seek relative to the current position (delta in milliseconds; negative rewinds).
+function seekBy(deltaMs) {
+	var ms = getCurrentMs();
+	seekInScene(getSceneRange(ms), ms + deltaMs);
 }
 
 function choice(choiceIndex) {
+	if (!currentChoiceMoment)
+		return;
 	nextChoice = choiceIndex;
-	newList("choices");
+	markChoice(choiceIndex);
 	if (!currentChoiceMoment.config.disableImmediateSceneTransition)
 		playNextSegment(prevSegment);
 }
@@ -846,8 +1071,26 @@ function playSegment(segmentId, noSeek) {
 	return false;
 }
 
+// The number of scenes that the viewer has watched. Breadcrumbs count too,
+// because they recorded visits before the player kept this list.
+function countScenesSeen() {
+	var seen = new Set();
+	for (var key of Object.keys(ls)) {
+		var match = /^(?:seen|breadcrumb)_(.+)$/.exec(key);
+		if (match && match[1] in segmentMap.segments)
+			seen.add(match[1]);
+		if (match && key[0] == 'b' && ls[key] in segmentMap.segments)
+			seen.add(ls[key]);
+	}
+	return seen.size;
+}
+
 function reset() {
+	// Keep the viewer preferences (language, subtitles, volume).
+	const prefs = Object.entries(ls).filter(([key]) => key.startsWith('pref_'));
 	ls.clear();
+	for (const [key, value] of prefs)
+		ls[key] = value;
 	location.hash = '';
 	location.reload();
 }
