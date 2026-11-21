@@ -47,4 +47,4 @@ Edit `VIDEO_URL` in `assets/scripts.js` and rebuild the image. Use an HTTPS URL 
 
 ## Credits
 
-Based on the [original player by joric](https://github.com/joric/bandersnatch/), with contributions from [mohetios](https://github.com/mohetios) and [CyberShadow](https://github.com/CyberShadow).
+This edition is by [haina2410](https://github.com/haina2410). It is based on the [original player by joric](https://github.com/joric/bandersnatch/), with contributions from [mohetios](https://github.com/mohetios) and [CyberShadow](https://github.com/CyberShadow).
