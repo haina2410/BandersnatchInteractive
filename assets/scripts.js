@@ -654,10 +654,9 @@ document.addEventListener('DOMContentLoaded', function () {
 	const resetConfirm = document.getElementById('reset-confirm');
 	const muteButton = document.getElementById('btn-mute');
 	const volumeBar = document.getElementById('volume');
-	const speed = document.getElementById('speed');
 	const buffering = document.getElementById('buffering');
 	const toastBox = document.getElementById('toast');
-	const SPEEDS = Array.from(speed.options, option => Number(option.value));
+
 	const status = document.getElementById('start-status');
 	const choiceTranslation = document.getElementById('choice-translation');
 	const controls = document.getElementById('video-controls');
@@ -880,18 +879,6 @@ document.addEventListener('DOMContentLoaded', function () {
 	video.addEventListener('volumechange', updateVolume);
 	updateVolume();
 
-	// Speed
-	function stepSpeed(direction) {
-		let index = SPEEDS.indexOf(video.playbackRate);
-		if (index < 0)
-			index = SPEEDS.indexOf(1);
-		video.playbackRate = SPEEDS[Math.min(SPEEDS.length - 1, Math.max(0, index + direction))];
-		toast(video.playbackRate + '×');
-	}
-
-	speed.addEventListener('change', () => { video.playbackRate = Number(speed.value); });
-	video.addEventListener('ratechange', () => { speed.value = String(video.playbackRate); });
-
 	// Show the loading sign only when the wait is longer than a moment.
 	function setBuffering(waiting) {
 		clearTimeout(bufferTimer);
@@ -988,13 +975,11 @@ document.addEventListener('DOMContentLoaded', function () {
 			case 'KeyR': playSegment(null); toast('From the beginning'); break;
 			case 'Space':
 			case 'KeyK': togglePlayPause(); break;
-			case 'KeyJ': seekBy(-10000); toast('−10 s'); break;
-			case 'KeyL': seekBy(10000); toast('+10 s'); break;
+			case 'ArrowLeft': seekBy(-10000); toast('−10 s'); break;
+			case 'ArrowRight': seekBy(10000); toast('+10 s'); break;
 			case 'KeyM': toggleMute(); toast(video.muted ? 'Sound off' : 'Sound on'); break;
-			case 'ArrowLeft': jumpBack(); toast('Previous scene'); break;
-			case 'ArrowRight': jumpForward(); toast('Next scene'); break;
-			case 'ArrowUp': stepSpeed(1); break;
-			case 'ArrowDown': stepSpeed(-1); break;
+			case 'KeyJ': jumpBack(); toast('Previous scene'); break;
+			case 'KeyL': jumpForward(); toast('Next scene'); break;
 			case 'Backspace':
 				if (!deleteDigit())
 					return;

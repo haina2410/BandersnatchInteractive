@@ -15,7 +15,7 @@ Open [http://localhost:8080](http://localhost:8080) and select **Play film**. Th
 
 ## Playback
 
-The configured source is a Matroska file with HEVC video. Use Chrome or Edge on a device with HEVC playback support. Select subtitles, speed and volume in the playback toolbar and choose the language of interactive choices on the start screen.
+The configured source is a Matroska file with HEVC video. Use Chrome or Edge on a device with HEVC playback support. Select subtitles and volume in the playback toolbar and choose the language of interactive choices on the start screen.
 
 The start screen shows **Continue watching** when there is a bookmarked scene or a saved position. **Start from the beginning** plays the film again and keeps the saved choices. **Erase saved choices** clears the choices and the saved position. The player keeps the choice language, subtitle language and volume.
 
@@ -27,9 +27,8 @@ During a choice, the answer that you pick stays marked in blue. If you do not an
 | --- | --- |
 | 1 / 2 | Pick a choice (0–9 type digits on the phone keypad) |
 | Space or K | Play or pause |
-| J / L | Go back or forward 10 seconds in the current scene |
-| ← / → | Jump to the previous or next segment or interaction |
-| ↓ / ↑ | Slow down or speed up (0.5× to 2×) |
+| ← / → | Go back or forward 10 seconds in the current scene |
+| J / L | Jump to the previous or next segment or interaction |
 | M | Mute |
 | F | Toggle fullscreen |
 | R | Restart the video |
