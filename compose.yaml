@@ -1,0 +1,7 @@
+services:
+  player:
+    build: .
+    image: bandersnatch-player
+    ports:
+      - "1984:8080"
+    restart: unless-stopped

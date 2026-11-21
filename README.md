@@ -7,11 +7,19 @@ Watch Bandersnatch in your browser and make choices that determine what happens 
 Build the static site and serve it with unprivileged NGINX.
 
 ```sh
-docker build -t bandersnatch-player .
-docker run --rm -p 8080:8080 bandersnatch-player
+docker compose up -d --build
 ```
 
-Open [http://localhost:8080](http://localhost:8080) and select **Play film**. The browser streams the film from its host. The image contains the player and subtitles.
+Open [http://localhost:1984](http://localhost:1984) and select **Play film**. Stop the player with `docker compose down`.
+
+To use Docker without Compose:
+
+```sh
+docker build -t bandersnatch-player .
+docker run --rm -p 1984:8080 bandersnatch-player
+```
+
+The browser streams the film from its host. The image contains the player and subtitles.
 
 ## Playback
 
