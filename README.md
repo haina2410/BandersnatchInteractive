@@ -29,6 +29,8 @@ The start screen shows **Continue watching** when there is a bookmarked scene or
 
 The player has no timeline, because the film has no fixed length: the choices set the path, and some paths go back to an earlier scene. The start screen shows how many of the 250 scenes you have seen.
 
+Open **Story tree** from the start screen or playback controls to see how choices connect. The dot marks your current stage. Select any stage to jump straight to its choice prompt or the start of its scene.
+
 During a choice, the answer that you pick stays marked in blue. If you do not answer, the player uses the answer that the line below the choices names.
 
 | Key | Action |

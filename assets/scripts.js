@@ -434,7 +434,7 @@ var prevSegment = null; // for breadcrumbs
 var segmentTransition = false;
 var lastMoments = [];
 
-function ontimeupdate(evt) {
+function ontimeupdate(storyJump = false) {
 	var ms = getCurrentMs();
 	currentSegment = getSegmentId(ms);
 	let segment = segmentMap.segments[currentSegment];
@@ -447,11 +447,11 @@ function ontimeupdate(evt) {
 	// Distinguish between the user seeking manually with <video> controls,
 	// and the video playing normally (past some timestamp / boundary).
 	let timeElapsed = ms - lastMs;
-	let seeked = timeElapsed < 0 || timeElapsed >= 2000;
+	let seeked = storyJump || timeElapsed < 0 || timeElapsed >= 2000;
 	lastMs = ms;
 
 	// Recalculate title and hash only when we pass some meaningful timestamp.
-	let placeChanged = false;
+	let placeChanged = storyJump;
 
 	// Handle segment change
 	if (lastSegment != currentSegment) {
@@ -533,7 +533,7 @@ function ontimeupdate(evt) {
 		if (ms < m.startMs && m.startMs < nextEvent)
 			nextEvent = m.startMs;
 	var timeLeft = nextEvent - ms;
-	if (timeLeft > 0)
+	if (timeLeft > 0 && !document.getElementById('video').paused)
 		timerId = setTimeout(ontimeupdate, timeLeft);
 }
 
@@ -675,6 +675,11 @@ document.addEventListener('DOMContentLoaded', function () {
 	const controls = document.getElementById('video-controls');
 	const playButton = document.getElementById('btn-play');
 	const subtitles = document.getElementById('subtitles');
+	const storyDialog = document.getElementById('story-tree');
+	const storyContent = document.getElementById('story-tree-content');
+	const storyStart = document.getElementById('story-tree-start');
+	const storyCurrent = document.getElementById('story-tree-current');
+	const menuStoryButton = document.getElementById('menu-story-tree');
 
 	let starting = false;
 	let timelineReady = false;
@@ -682,7 +687,11 @@ document.addEventListener('DOMContentLoaded', function () {
 	let toastTimer;
 	let bufferTimer;
 	let startOver = false;
+	let startAtStage;
 	let controlsWereVisible = false;
+	let resumeAfterStory = false;
+	let storyOpener;
+	let storyPath = [];
 
 	function applyChoiceLanguage() {
 		translated_choices = window[choiceTranslation.value];
@@ -725,6 +734,7 @@ document.addEventListener('DOMContentLoaded', function () {
 		startScreen.classList.toggle('is-loading', loading);
 		startButton.disabled = loading;
 		restartButton.disabled = loading;
+		menuStoryButton.disabled = loading;
 		if (loading)
 			startLabel.textContent = 'Loading…';
 		else
@@ -743,7 +753,9 @@ document.addEventListener('DOMContentLoaded', function () {
 			return;
 
 		timelineReady = true;
-		if (startOver || (!playHash(window.location.hash) && !playHash(ls.place)))
+		if (startAtStage)
+			jumpToStoryStage(startAtStage);
+		else if (startOver || (!playHash(window.location.hash) && !playHash(ls.place)))
 			playSegment(null);
 	}
 
@@ -807,15 +819,20 @@ document.addEventListener('DOMContentLoaded', function () {
 			ontimeupdate();
 	});
 
-	function begin(fromStart) {
+	function begin(fromStart, stageId) {
 		starting = true;
 		startOver = fromStart;
+		startAtStage = stageId;
 		setLoading(true);
 		status.textContent = '';
 		if (video.error)
 			video.load();
-		if (timelineReady && fromStart)
-			playSegment(null);
+		if (timelineReady) {
+			if (startAtStage)
+				jumpToStoryStage(startAtStage);
+			else if (fromStart)
+				playSegment(null);
+		}
 		prepareTimeline();
 		playVideo();
 	}
@@ -835,6 +852,58 @@ document.addEventListener('DOMContentLoaded', function () {
 	}
 
 	document.getElementById('btn-exit').addEventListener('click', exitToMenu);
+
+	function centerStoryStage(selector) {
+		const stage = storyContent.querySelector(selector);
+		if (stage)
+			storyContent.scrollTo({
+				left: stage.offsetLeft - (storyContent.clientWidth - stage.offsetWidth) / 2,
+				top: stage.offsetTop - (storyContent.clientHeight - stage.offsetHeight) / 2,
+			});
+	}
+
+	storyStart.addEventListener('click', () => centerStoryStage('[data-root]'));
+	storyCurrent.addEventListener('click', () => centerStoryStage('[aria-current]'));
+
+	function closeStoryTree() {
+		storyDialog.close();
+		storyOpener.focus({ preventScroll: true });
+		if (resumeAfterStory && !player.hidden)
+			playVideo();
+		resumeAfterStory = false;
+	}
+
+	function openStoryTree(event) {
+		storyOpener = event.currentTarget;
+		const currentId = (player.hidden
+			? getSegmentId(getHashMs(window.location.hash) ?? getHashMs(ls.place))
+			: getSegmentId(getCurrentMs())) || segmentMap.initialSegment;
+		resumeAfterStory = !player.hidden && !video.paused;
+		if (resumeAfterStory)
+			video.pause();
+		renderStoryTree(storyContent, currentId, storyPath, path => {
+			storyPath = path;
+			const stageId = path.at(-1);
+			if (player.hidden) {
+				closeStoryTree();
+				begin(false, stageId);
+			} else {
+				jumpToStoryStage(stageId);
+				closeStoryTree();
+			}
+		});
+		storyStart.hidden = currentId === segmentMap.initialSegment;
+		storyDialog.showModal();
+		centerStoryStage('[aria-current]');
+	}
+
+	menuStoryButton.addEventListener('click', openStoryTree);
+	document.getElementById('btn-story-tree').addEventListener('click', openStoryTree);
+	document.getElementById('story-tree-close').addEventListener('click', closeStoryTree);
+	storyDialog.addEventListener('cancel', function (event) {
+		event.preventDefault();
+		closeStoryTree();
+	});
 
 	if (VIDEO_URL) {
 		video.src = VIDEO_URL;
@@ -1017,7 +1086,7 @@ document.addEventListener('DOMContentLoaded', function () {
 	video.addEventListener('dblclick', toggleFullScreen);
 
 	document.addEventListener('keydown', function (event) {
-		if (player.hidden || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey)
+		if (player.hidden || storyDialog.open || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey)
 			return;
 		if (event.target instanceof Element
 			&& (event.target.closest('input, select') || (event.code === 'Space' && event.target.closest('button, a'))))
@@ -1056,10 +1125,29 @@ document.addEventListener('DOMContentLoaded', function () {
 	});
 });
 
-function seek(ms) {
+function seek(ms, storyJump = false) {
 	console.log('seek', ms);
 	document.getElementById("video").currentTime = ms / 1000.0;
-	ontimeupdate(null);
+	ontimeupdate(storyJump);
+}
+
+function jumpToStoryStage(segmentId) {
+	const moments = [...(momentsBySegment[segmentId] || [])].sort((a, b) => a.startMs - b.startMs);
+	const prompt = moments.find(moment => moment.choices?.some(choice => choice.segmentId || choice.sg))
+		|| moments.find(moment => moment.choices);
+	const targetMs = prompt?.startMs ?? getSegmentMs(segmentId);
+
+	// Apply the stage's own impressions before the prompt, as normal playback would.
+	for (const moment of moments) {
+		if (moment.startMs > targetMs)
+			break;
+		if (moment.impressionData && evalPrecondition(moment.precondition, 'story stage ' + segmentId))
+			applyImpression(moment.impressionData);
+	}
+	for (const moment of Object.values(lastMoments))
+		momentEnd(moment, true);
+	lastMoments = [];
+	seek(targetMs, true);
 }
 
 // The start and end of the scene (segment) at the given timestamp.
@@ -1119,7 +1207,7 @@ function playSegment(segmentId, noSeek) {
 
 // The number of scenes that the viewer has watched. Breadcrumbs count too,
 // because they recorded visits before the player kept this list.
-function countScenesSeen() {
+function getSeenScenes() {
 	var seen = new Set();
 	for (var key of Object.keys(ls)) {
 		var match = /^(?:seen|breadcrumb)_(.+)$/.exec(key);
@@ -1128,7 +1216,11 @@ function countScenesSeen() {
 		if (match && key[0] == 'b' && ls[key] in segmentMap.segments)
 			seen.add(ls[key]);
 	}
-	return seen.size;
+	return seen;
+}
+
+function countScenesSeen() {
+	return getSeenScenes().size;
 }
 
 function reset() {
@@ -1142,11 +1234,9 @@ function reset() {
 }
 
 var lastHash = '';
-function playHash(hash) {
+function getHashMs(hash) {
 	if (!hash)
-		return false;
-	if (hash === lastHash)
-		return true;
+		return;
 
 	const [location, momentId] = hash.slice(1).split('/');
 	let ms;
@@ -1158,7 +1248,14 @@ function playHash(hash) {
 		ms = segmentMap.segments[location]?.startTimeMs;
 	}
 
-	if (!Number.isFinite(ms))
+	return Number.isFinite(ms) ? ms : undefined;
+}
+
+function playHash(hash) {
+	if (hash && hash === lastHash)
+		return true;
+	const ms = getHashMs(hash);
+	if (ms === undefined)
 		return false;
 
 	lastHash = hash;
