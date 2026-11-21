@@ -369,11 +369,6 @@ kbd {
     outline: none;
 }
 
-#video::cue {
-    background: #000c;
-    color: #fff;
-}
-
 .toast,
 .buffering,
 #choiceHint {
@@ -459,9 +454,47 @@ kbd {
     gap: .5rem;
     position: absolute;
     right: var(--gutter);
-    bottom: clamp(5rem, 12vh, 7rem);
+    bottom: var(--stack-bottom);
     left: var(--gutter);
     pointer-events: none;
+    --stack-bottom: clamp(5rem, 12vh, 7rem);
+}
+
+/* Subtitles. They stay above the choices and the playback bar. */
+
+.captions {
+    display: grid;
+    justify-items: center;
+    gap: .125rem;
+    max-width: min(100%, 52rem);
+    margin-bottom: .25rem;
+    color: #fff;
+    font-size: clamp(1rem, 2.1vw, 1.5rem);
+    line-height: 1.5;
+    text-align: center;
+    text-wrap: balance;
+    transition: translate .2s ease;
+}
+
+.captions:empty {
+    display: none;
+}
+
+.captions p {
+    margin: 0;
+}
+
+.captions span {
+    padding: .125em .5em;
+    background: #000c;
+    white-space: pre-line;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+}
+
+/* Without choices and without the playback bar, the subtitles move down. */
+.player.is-idle:not(.has-choices) .captions {
+    translate: 0 calc(var(--stack-bottom) - clamp(1.5rem, 5vh, 3rem));
 }
 
 .buttons {
@@ -741,7 +774,7 @@ kbd {
     }
 
     .controls {
-        bottom: 8rem;
+        --stack-bottom: 8rem;
     }
 
     #volume {
@@ -762,6 +795,7 @@ kbd {
 
     .exit-button,
     .video-controls,
+    .captions,
     #progress {
         transition: none;
     }

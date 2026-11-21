@@ -92,6 +92,7 @@
 							<div><dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>Back or forward 10 seconds</dd></div>
 							<div><dt><kbd>J</kbd> <kbd>L</kbd></dt><dd>Previous or next scene</dd></div>
 							<div><dt><kbd>M</kbd></dt><dd>Mute</dd></div>
+							<div><dt><kbd>C</kbd></dt><dd>Subtitles on or off</dd></div>
 							<div><dt><kbd>F</kbd></dt><dd>Fullscreen</dd></div>
 							<div><dt><kbd>R</kbd></dt><dd>Start from the beginning</dd></div>
 						</dl>
@@ -141,6 +142,7 @@
 			</button>
 
 			<div class="controls">
+				<div id="captions" class="captions"></div>
 				<div class="buttons">
 					<ul id="choices" aria-label="Story choices"></ul>
 					<ul id="interactionZones" hidden></ul>
@@ -173,7 +175,7 @@
 						</svg>
 					</button>
 					<input id="volume" type="range" min="0" max="100" value="100" step="1" aria-label="Volume">
-					<select id="subtitles" aria-label="Subtitles" title="Subtitles">
+					<select id="subtitles" aria-label="Subtitles" title="Subtitles (C)">
 						<option value="">Subtitles off</option>
 					</select>
 					<button id="btn-fullscreen" class="icon-button" type="button" aria-label="Fullscreen" title="Fullscreen (F)">

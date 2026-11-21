@@ -38,6 +38,7 @@ During a choice, the answer that you pick stays marked in blue. If you do not an
 | ← / → | Go back or forward 10 seconds in the current scene |
 | J / L | Jump to the previous or next segment or interaction |
 | M | Mute |
+| C | Subtitles on or off |
 | F | Toggle fullscreen |
 | R | Restart the video |
 

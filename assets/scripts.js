@@ -371,6 +371,8 @@ function addChoices(r) {
 	ul.classList.remove('has-pick');
 	setChoiceHint('');
 	document.getElementById("choiceCaption").innerHTML = '';
+	// The subtitles use this class to stay above the choices.
+	document.getElementById("wrapper-video").classList.toggle('has-choices', !!r);
 	if (!r) return;
 
 	nextChoice = r.defaultChoiceIndex;
@@ -896,31 +898,78 @@ document.addEventListener('DOMContentLoaded', function () {
 	for (const [index, track] of tracks.entries())
 		subtitles.add(new Option(track.label, String(index)));
 
-	function updateSubtitles() {
-		const activeTrack = tracks.findIndex(track => track.mode === 'showing');
-		subtitles.value = activeTrack < 0 ? '' : String(activeTrack);
+	// The player draws the subtitles in its own element. The browser draws
+	// them on the video, where the choices and the playback bar hide them.
+	const captions = document.getElementById('captions');
+	let captionTrack = null;
+	let lastSubtitles = '';
+
+	function renderCaptions() {
+		captions.replaceChildren();
+		if (!captionTrack || !captionTrack.activeCues)
+			return;
+		for (const cue of captionTrack.activeCues) {
+			const line = document.createElement('p');
+			const text = document.createElement('span');
+			text.append(cue.getCueAsHTML());
+			line.append(text);
+			captions.append(line);
+		}
 	}
 
+	// The "hidden" mode loads the cues but the browser does not draw them.
 	function showSubtitles(value) {
-		for (const [index, track] of tracks.entries())
-			track.mode = String(index) === value ? 'showing' : 'disabled';
+		if (captionTrack)
+			captionTrack.removeEventListener('cuechange', renderCaptions);
+		captionTrack = null;
+		for (const [index, track] of tracks.entries()) {
+			const active = String(index) === value;
+			track.mode = active ? 'hidden' : 'disabled';
+			if (active)
+				captionTrack = track;
+		}
+		if (captionTrack) {
+			captionTrack.addEventListener('cuechange', renderCaptions);
+			lastSubtitles = value;
+		}
+		subtitles.value = captionTrack ? value : '';
+		renderCaptions();
 	}
 
-	subtitles.addEventListener('change', function () {
-		showSubtitles(subtitles.value);
-		setPref('subtitles', subtitles.value === '' ? '' : tracks[Number(subtitles.value)].label);
+	function selectSubtitles(value) {
+		showSubtitles(value);
+		setPref('subtitles', captionTrack ? captionTrack.label : '');
+	}
+
+	function toggleSubtitles() {
+		if (captionTrack)
+			selectSubtitles('');
+		else
+			selectSubtitles(lastSubtitles || '0');
+		toast(captionTrack ? 'Subtitles: ' + captionTrack.label : 'Subtitles off');
+	}
+
+	subtitles.addEventListener('change', () => selectSubtitles(subtitles.value));
+
+	// If the browser shows a track itself, move it to the player element.
+	video.textTracks.addEventListener('change', function () {
+		const shown = tracks.findIndex(track => track.mode === 'showing');
+		if (shown >= 0)
+			showSubtitles(String(shown));
 	});
-	video.textTracks.addEventListener('change', updateSubtitles);
 
-	// Apply the saved subtitle language. Without one, the default track shows.
+	// Apply the saved subtitle language. Without one, use the default track.
 	const savedSubtitles = getPref('subtitles');
-	if (savedSubtitles !== undefined) {
-		for (const element of video.querySelectorAll('track[default]'))
-			element.removeAttribute('default');
-		const index = tracks.findIndex(track => track.label === savedSubtitles);
-		showSubtitles(index < 0 ? '' : String(index));
-	}
-	updateSubtitles();
+	const defaultTrack = video.querySelector('track[default]');
+	const defaultSubtitles = defaultTrack ? tracks.indexOf(defaultTrack.track) : -1;
+	const firstSubtitles = savedSubtitles === undefined
+		? defaultSubtitles
+		: tracks.findIndex(track => track.label === savedSubtitles);
+	if (defaultTrack)
+		defaultTrack.removeAttribute('default');
+	if (defaultSubtitles >= 0)
+		lastSubtitles = String(defaultSubtitles);
+	showSubtitles(firstSubtitles < 0 ? '' : String(firstSubtitles));
 
 	function showControls() {
 		player.classList.add('controls-visible');
@@ -978,6 +1027,7 @@ document.addEventListener('DOMContentLoaded', function () {
 			case 'ArrowLeft': seekBy(-10000); toast('−10 s'); break;
 			case 'ArrowRight': seekBy(10000); toast('+10 s'); break;
 			case 'KeyM': toggleMute(); toast(video.muted ? 'Sound off' : 'Sound on'); break;
+			case 'KeyC': toggleSubtitles(); break;
 			case 'KeyJ': jumpBack(); toast('Previous scene'); break;
 			case 'KeyL': jumpForward(); toast('Next scene'); break;
 			case 'Backspace':
